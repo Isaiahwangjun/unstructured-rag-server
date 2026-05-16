@@ -1,0 +1,29 @@
+{
+  "source": "tiny.pdf",
+  "chunk_count": 2,
+  "chunks_with_context_header": 2,
+  "chunks": [
+    {
+      "id": "c_0001",
+      "text": "From the tiny test fixture, in the Animals section, describing dogs.\n\nAnimals\n\nDogs are loyal companions and have been domesticated for thousands of years.",
+      "body": "Dogs are loyal companions and have been domesticated for thousands of years.",
+      "context_header": "From the tiny test fixture, in the Animals section, describing dogs.",
+      "headings": ["Animals"],
+      "page_start": 1,
+      "page_end": 1,
+      "char_count": 150,
+      "body_char_count": 78
+    },
+    {
+      "id": "c_0002",
+      "text": "From the tiny test fixture, in the Vehicles section, describing cars.\n\nVehicles\n\nCars are wheeled motor vehicles used for transportation.",
+      "body": "Cars are wheeled motor vehicles used for transportation.",
+      "context_header": "From the tiny test fixture, in the Vehicles section, describing cars.",
+      "headings": ["Vehicles"],
+      "page_start": 2,
+      "page_end": 2,
+      "char_count": 130,
+      "body_char_count": 56
+    }
+  ]
+}

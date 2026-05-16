@@ -1,0 +1,179 @@
+# unstructured-rag-server
+
+Remote **MCP server** that turns the `chunks.json` produced by
+[`unstructured-rag-kit`](https://github.com/isaiahwang/unstructured-rag-kit)
+into a searchable knowledge base, accessible to any LLM agent that
+speaks MCP — Claude Desktop, Claude Code, or a custom Python script.
+
+```
+chunks.json ──► rag-ingest ──► Chroma ──► rag-server ──► MCP tool: search()
+                  (OpenAI                   (streamable
+                   embeddings)              HTTP)
+```
+
+The split is deliberate: the upstream plugin stays embedder-agnostic
+and DB-agnostic, so the same `chunks.json` works with any retrieval
+stack you want to pair it with. This repo is one such pairing.
+
+## Quickstart
+
+```bash
+# 1. install
+uv sync
+
+# 2. point at OpenAI (or an OpenAI-compatible gateway)
+cp .env.example .env
+$EDITOR .env                      # paste OPENAI_API_KEY
+
+# 3. ingest a chunks.json from the sibling repo
+uv run rag-ingest ../unstructured-rag-kit/pipeline-output/chunk-text/thesis/chunks.json
+# → ingested 51 chunks from thesis
+
+# 4. start the MCP server (separate terminal)
+uv run rag-server
+# → Starting MCP server on http://127.0.0.1:8765/mcp
+
+# 5. verify end-to-end with the included client
+uv run python scripts/mcp_client_demo.py "supervised learning"
+# → JSON list of 5 hits, exits 0
+```
+
+## Connect Claude Desktop
+
+In `~/Library/Application Support/Claude/claude_desktop_config.json`
+(macOS):
+
+```json
+{
+  "mcpServers": {
+    "rag": {
+      "url": "http://127.0.0.1:8765/mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop. The `search` and `list_sources` tools should
+appear in the tool picker. Tested on Claude Desktop ≥ the version
+that supports remote streamable-HTTP servers (check **Settings →
+Connectors → Add custom connector** if you don't see the URL field).
+
+## Connect Claude Code
+
+```bash
+claude mcp add --transport http rag http://127.0.0.1:8765/mcp
+```
+
+Then in any Claude Code session:
+
+```
+You:    Search the indexed thesis for what dataset they used.
+Claude: [calls rag.search → returns thesis::c_0030 with NSL-KDD details]
+```
+
+## Tools exposed
+
+| Tool | Signature | Purpose |
+|---|---|---|
+| `search` | `search(query: str, k: int = 5, source: str \| None = None) -> list[Hit]` | Semantic search over the indexed chunks. `source` filters to one document basename. |
+| `list_sources` | `list_sources() -> list[str]` | Distinct document basenames currently indexed. Use this first if you don't know what's in the corpus. |
+
+`Hit` shape:
+
+```python
+{
+  "id": "thesis::c_0017",          # namespaced chunk id
+  "source": "thesis",               # document basename
+  "body": "<original chunk text>",  # clean snippet, no context-header prefix
+  "headings": ["2. 相關研究", "2.2.1 監督式學習"],
+  "page_start": 19,
+  "page_end": 20,
+  "score": 0.4791                   # cosine distance; lower is closer
+}
+```
+
+The reason `body` (not `text`) is what comes back: chunk-text
+embeds the longer context-prefixed string, but for citation /
+display the original prose is what you want.
+
+## Verifiable end-to-end
+
+The reviewer should be able to run three commands and see the system
+work without any further interpretation:
+
+```bash
+# Ingest the sibling repo's pre-built thesis chunks (51 chunks)
+uv run rag-ingest ../unstructured-rag-kit/pipeline-output/chunk-text/thesis/chunks.json
+
+# Run the test suite — round-trips a 2-chunk fixture without hitting
+# OpenAI or the network. No API key required for tests.
+uv run pytest -v
+
+# Start the server, then in another terminal:
+uv run python scripts/mcp_client_demo.py "supervised learning"
+# Exits 0 with valid hits, 1 if anything failed (collection empty,
+# server unreachable, malformed schema, etc.)
+```
+
+The MCP client demo runs the full handshake — `initialize`,
+`list_tools`, `call_tool("list_sources")`, `call_tool("search")` —
+not just a raw HTTP POST, so it's exercising the protocol the way
+Claude Desktop and Claude Code will.
+
+## Configuration
+
+All env vars optional except `OPENAI_API_KEY`. Defaults shown.
+
+| Env var | Default | What it does |
+|---|---|---|
+| `OPENAI_API_KEY` | *(required)* | Auth for the embedder. |
+| `OPENAI_BASE_URL` | unset | Override to point at an OpenAI-compatible gateway (Azure OpenAI, LiteLLM, internal proxies). Leave unset to hit OpenAI directly. |
+| `EMBED_MODEL` | `text-embedding-3-small` | Any embedding model the gateway exposes. |
+| `CHROMA_DIR` | `./.chroma` | On-disk persistent store. Safe to delete; `rag-ingest` rebuilds. |
+| `COLLECTION` | `rag_kit` | Chroma collection name. Distinct collections give you isolated indexes. |
+| `MCP_HOST` | `127.0.0.1` | Bind address. Local by default — see "Scope" below. |
+| `MCP_PORT` | `8765` | TCP port. |
+| `MCP_PATH` | `/mcp` | URL path the streamable-HTTP transport listens on. |
+
+## Scope
+
+**In:**
+
+- One ingest CLI (`rag-ingest`).
+- One MCP server with two tools (`search`, `list_sources`).
+- A streamable-HTTP transport (the MCP spec's current production
+  transport — HTTP+SSE is deprecated, websockets aren't part of the
+  spec).
+- A pytest suite that round-trips an in-process fixture without
+  network calls.
+- A Python MCP client demo that proves the protocol handshake works.
+
+**Out (deliberate, not "future work"):**
+
+- **No auth.** Bind 127.0.0.1 by default. The JD says "remote MCP",
+  not "public MCP"; treating the URL as private is appropriate for
+  a take-home / single-machine deployment. Putting auth on later
+  is a deployment concern, not a code concern.
+- **No FastAPI / REST surface alongside MCP.** MCP is the only HTTP
+  surface. Bolting on REST muddies the deliverable.
+- **No Docker.** `uv run` is enough. Dockerizing wouldn't change
+  the truth value of the demo.
+- **No re-embedding detection on re-ingest.** Same id is upserted
+  in Chroma; the embedding cost is paid again. Acceptable at the
+  document-count this targets.
+- **No streaming / batch ingest.** One `chunks.json` per CLI call.
+  Loop in shell if you have many.
+
+See `design_notes.md` for the reasoning behind the choices that did
+make it in.
+
+## Sibling repo
+
+The upstream pipeline that produces `chunks.json` lives at
+[`unstructured-rag-kit`](https://github.com/isaiahwang/unstructured-rag-kit).
+That plugin's contract ends at `chunks.json`; this repo's contract
+starts there.
+
+## License
+
+MIT.
