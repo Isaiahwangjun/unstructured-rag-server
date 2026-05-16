@@ -25,18 +25,21 @@ uv sync
 cp .env.example .env
 $EDITOR .env                      # paste OPENAI_API_KEY
 
-# 3. ingest a chunks.json from the sibling repo
-uv run rag-ingest ../unstructured-rag-kit/pipeline-output/chunk-text/thesis/chunks.json
-# → ingested 51 chunks from thesis
-
-# 4. start the MCP server (separate terminal)
+# 3. start the MCP server — the repo ships with a pre-built index
 uv run rag-server
 # → Starting MCP server on http://127.0.0.1:8765/mcp
+# → Sources indexed: ['edge_case_deck', 'thesis']
 
-# 5. verify end-to-end with the included client
+# 4. verify end-to-end with the included client (separate terminal)
 uv run python scripts/mcp_client_demo.py "supervised learning"
 # → JSON list of 5 hits, exits 0
 ```
+
+The `.chroma/` directory in this repo is a Chroma persistent store
+pre-built from the sibling repo's `chunks.json` outputs (51 chunks
+from a Chinese intrusion-detection thesis + 2 chunks from a small
+PPTX deck). You don't need to ingest anything to try it. To wipe
+and re-build, see [Re-ingesting](#re-ingesting) below.
 
 ## Connect Claude Desktop
 
@@ -102,18 +105,32 @@ The reviewer should be able to run three commands and see the system
 work without any further interpretation:
 
 ```bash
-# Ingest the sibling repo's pre-built thesis chunks (51 chunks)
-uv run rag-ingest ../unstructured-rag-kit/pipeline-output/chunk-text/thesis/chunks.json
-
 # Run the test suite — round-trips a 2-chunk fixture without hitting
 # OpenAI or the network. No API key required for tests.
 uv run pytest -v
 
-# Start the server, then in another terminal:
+# Start the server (uses the pre-built .chroma/ index), then in
+# another terminal:
 uv run python scripts/mcp_client_demo.py "supervised learning"
 # Exits 0 with valid hits, 1 if anything failed (collection empty,
 # server unreachable, malformed schema, etc.)
 ```
+
+## Re-ingesting
+
+The `.chroma/` shipped with the repo is what a reviewer sees by
+default. To rebuild from scratch (e.g. against your own
+`chunks.json`):
+
+```bash
+rm -rf .chroma/
+uv run rag-ingest <path/to/chunks.json> [<path/to/another.json> ...]
+```
+
+Each ingest call namespaces chunk ids by the document basename
+(`thesis::c_0001`, `edge_case_deck::c_0001`), so re-ingesting the
+same file is idempotent and ingesting multiple files is collision-
+free. See `design_notes.md` for why.
 
 The MCP client demo runs the full handshake — `initialize`,
 `list_tools`, `call_tool("list_sources")`, `call_tool("search")` —
