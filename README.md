@@ -123,20 +123,44 @@ display the original prose is what you want.
 
 ## Verifiable end-to-end
 
-The reviewer should be able to run three commands and see the system
-work without any further interpretation:
+Three independent ways to verify the system, in increasing order
+of "is the deployment really working":
+
+### 1. Local unit tests (no network, no key)
 
 ```bash
-# Run the test suite — round-trips a 2-chunk fixture without hitting
-# OpenAI or the network. No API key required for tests.
 uv run pytest -v
-
-# Start the server (uses the pre-built .chroma/ index), then in
-# another terminal:
-uv run python scripts/mcp_client_demo.py "supervised learning"
-# Exits 0 with valid hits, 1 if anything failed (collection empty,
-# server unreachable, malformed schema, etc.)
 ```
+
+Round-trips a 2-chunk fixture with a stubbed embedder. Asserts
+ingest correctness, id namespacing, and `list_sources` round-trip.
+
+### 2. Live demo against the deployed URL
+
+```bash
+bash examples/run_demo.sh
+```
+
+Runs three example queries (English → CJK thesis, English → PPTX,
+CJK → CJK) against `https://unstructured-rag-server.onrender.com/mcp`
+and asserts every one returns hits with a valid schema. Exits 0
+only if all three pass.
+
+### 3. Inspect captured outputs
+
+[`examples/sample_output.md`](examples/sample_output.md) has the
+verbatim stdout/stderr from each query above, plus a Render boot
+log and a demo of the `source=` argument scoping results to one
+document.
+
+### MCP client test script
+
+[`scripts/mcp_client_demo.py`](scripts/mcp_client_demo.py) is the
+canonical client used by the live demo. It runs the full MCP
+handshake (`initialize` → `list_tools` → `call_tool`), validates
+required tools are present, validates `list_sources` returns at
+least one source, and validates every hit has the schema declared
+by `Hit`. Exits 0 only if every check passes.
 
 ## Re-ingesting
 
