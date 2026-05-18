@@ -1,9 +1,13 @@
 # unstructured-rag-server
 
 Remote **MCP server** that turns the `chunks.json` produced by
-[`unstructured-rag-kit`](https://github.com/isaiahwang/unstructured-rag-kit)
+[`unstructured-rag-kit`](https://github.com/Isaiahwangjun/unstructured-rag-kit)
 into a searchable knowledge base, accessible to any LLM agent that
 speaks MCP — Claude Desktop, Claude Code, or a custom Python script.
+
+**Live demo:** `https://unstructured-rag-server.onrender.com/mcp`
+(Render free tier — first request after idle takes ~30s to wake the
+container; subsequent requests are fast.)
 
 ```
 chunks.json ──► rag-ingest ──► Chroma ──► rag-server ──► MCP tool: search()
@@ -14,6 +18,20 @@ chunks.json ──► rag-ingest ──► Chroma ──► rag-server ──►
 The split is deliberate: the upstream plugin stays embedder-agnostic
 and DB-agnostic, so the same `chunks.json` works with any retrieval
 stack you want to pair it with. This repo is one such pairing.
+
+## Try the live demo first
+
+```bash
+git clone https://github.com/Isaiahwangjun/unstructured-rag-server.git
+cd unstructured-rag-server
+uv sync
+MCP_URL=https://unstructured-rag-server.onrender.com/mcp \
+    uv run python scripts/mcp_client_demo.py "supervised learning"
+```
+
+Should print 5 hits from a Chinese intrusion-detection thesis indexed
+in the live deployment, exit 0. No OpenAI key needed on your side —
+the deployed instance handles its own query embedding.
 
 ## Quickstart
 
@@ -50,11 +68,13 @@ In `~/Library/Application Support/Claude/claude_desktop_config.json`
 {
   "mcpServers": {
     "rag": {
-      "url": "http://127.0.0.1:8765/mcp"
+      "url": "https://unstructured-rag-server.onrender.com/mcp"
     }
   }
 }
 ```
+
+(For local: `http://127.0.0.1:8765/mcp`.)
 
 Restart Claude Desktop. The `search` and `list_sources` tools should
 appear in the tool picker. Tested on Claude Desktop ≥ the version
@@ -64,8 +84,10 @@ Connectors → Add custom connector** if you don't see the URL field).
 ## Connect Claude Code
 
 ```bash
-claude mcp add --transport http rag http://127.0.0.1:8765/mcp
+claude mcp add --transport http rag https://unstructured-rag-server.onrender.com/mcp
 ```
+
+(For local: `http://127.0.0.1:8765/mcp`.)
 
 Then in any Claude Code session:
 
@@ -187,7 +209,7 @@ make it in.
 ## Sibling repo
 
 The upstream pipeline that produces `chunks.json` lives at
-[`unstructured-rag-kit`](https://github.com/isaiahwang/unstructured-rag-kit).
+[`unstructured-rag-kit`](https://github.com/Isaiahwangjun/unstructured-rag-kit).
 That plugin's contract ends at `chunks.json`; this repo's contract
 starts there.
 
