@@ -16,8 +16,13 @@ load_dotenv()  # no-op if .env doesn't exist
 CHROMA_DIR: Path = Path(os.getenv("CHROMA_DIR", ".chroma")).resolve()
 COLLECTION: str = os.getenv("COLLECTION", "rag_kit")
 EMBED_MODEL: str = os.getenv("EMBED_MODEL", "text-embedding-3-small")
-MCP_HOST: str = os.getenv("MCP_HOST", "127.0.0.1")
-MCP_PORT: int = int(os.getenv("MCP_PORT", "8765"))
+
+# Hosting platforms (Zeabur, Render, Fly, Heroku) inject PORT and
+# expect the app to bind 0.0.0.0:$PORT. If we see PORT, we honour
+# that contract; otherwise we fall back to a local-friendly default.
+_PLATFORM_PORT = os.getenv("PORT")
+MCP_HOST: str = os.getenv("MCP_HOST", "0.0.0.0" if _PLATFORM_PORT else "127.0.0.1")
+MCP_PORT: int = int(os.getenv("MCP_PORT", _PLATFORM_PORT or "8765"))
 MCP_PATH: str = os.getenv("MCP_PATH", "/mcp")
 
 # Embeddings are sent to an OpenAI-compatible HTTP API. By default
