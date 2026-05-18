@@ -19,12 +19,25 @@ import sys
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, Field
 
 from . import config, embed, store
 
 
-mcp = FastMCP("unstructured-rag-server")
+# DNS-rebinding protection. FastMCP defaults to allowing only
+# localhost; once we deploy behind a real hostname (Render, Zeabur,
+# any reverse proxy), the Host header doesn't match and every request
+# 421s. We trust whatever the operator configures via MCP_ALLOWED_HOSTS
+# (comma-separated, supports wildcard "*"), defaulting to "*" so the
+# image runs out of the box on any PaaS.
+_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=config.MCP_ALLOWED_HOSTS,
+    allowed_origins=config.MCP_ALLOWED_ORIGINS,
+)
+
+mcp = FastMCP("unstructured-rag-server", transport_security=_security)
 
 
 class Hit(BaseModel):

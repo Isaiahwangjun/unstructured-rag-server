@@ -25,6 +25,22 @@ MCP_HOST: str = os.getenv("MCP_HOST", "0.0.0.0" if _PLATFORM_PORT else "127.0.0.
 MCP_PORT: int = int(os.getenv("MCP_PORT", _PLATFORM_PORT or "8765"))
 MCP_PATH: str = os.getenv("MCP_PATH", "/mcp")
 
+
+def _csv(value: str | None, default: list[str]) -> list[str]:
+    if not value:
+        return default
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+# FastMCP enforces an allow-list on Host and Origin headers as
+# DNS-rebinding protection. The library default is localhost-only,
+# which 421s any request from a real hostname (e.g. behind Render
+# / Zeabur / a reverse proxy). Default to "*" so the deployed image
+# works out of the box; tighten this in production by listing the
+# real hostname(s).
+MCP_ALLOWED_HOSTS: list[str] = _csv(os.getenv("MCP_ALLOWED_HOSTS"), ["*"])
+MCP_ALLOWED_ORIGINS: list[str] = _csv(os.getenv("MCP_ALLOWED_ORIGINS"), ["*"])
+
 # Embeddings are sent to an OpenAI-compatible HTTP API. By default
 # we hit OpenAI directly; users behind an OpenAI-compatible gateway
 # (Azure, LiteLLM, internal proxies) can override the base URL and
