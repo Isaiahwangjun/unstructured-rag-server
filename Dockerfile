@@ -1,7 +1,12 @@
-# Slim Python 3.13 image — Chroma + mcp + openai install cleanly here.
-# We install uv from the official base image so dep resolution and the
-# project layout match local dev exactly.
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+# Base on the official Python slim image from Docker Hub. We
+# previously used ghcr.io/astral-sh/uv but GHCR's intermittent 502s
+# break Render builds; Docker Hub is the more reliable source for an
+# unattended PaaS pipeline. uv installs into the image in one
+# `pip install` step.
+FROM python:3.13-slim-bookworm
+
+# uv is installed into /usr/local so it lands on PATH for every step.
+RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 
@@ -27,7 +32,7 @@ RUN uv sync --frozen --no-dev
 ENV PORT=8765
 EXPOSE 8765
 
-# stderr is unbuffered so Zeabur log streaming shows the boot lines
+# stderr is unbuffered so PaaS log streaming shows the boot lines
 # the moment they happen.
 ENV PYTHONUNBUFFERED=1
 
