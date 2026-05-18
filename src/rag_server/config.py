@@ -33,13 +33,19 @@ def _csv(value: str | None, default: list[str]) -> list[str]:
 
 
 # FastMCP enforces an allow-list on Host and Origin headers as
-# DNS-rebinding protection. The library default is localhost-only,
-# which 421s any request from a real hostname (e.g. behind Render
-# / Zeabur / a reverse proxy). Default to "*" so the deployed image
-# works out of the box; tighten this in production by listing the
-# real hostname(s).
-MCP_ALLOWED_HOSTS: list[str] = _csv(os.getenv("MCP_ALLOWED_HOSTS"), ["*"])
-MCP_ALLOWED_ORIGINS: list[str] = _csv(os.getenv("MCP_ALLOWED_ORIGINS"), ["*"])
+# DNS-rebinding protection. The MCP SDK only supports exact matches
+# or "<host>:*" port wildcards — it does NOT honour "*" as a
+# catch-all, so we can't ship a wildcard default that works behind
+# every PaaS hostname.
+#
+# Empty list (the default) means: skip DNS-rebinding protection
+# entirely. That's safe for this service because it carries no
+# cookie/auth state for an attacker to hijack via rebinding.
+# Operators who want the check can set MCP_ALLOWED_HOSTS to an
+# explicit comma-separated list of hostnames (and optionally
+# MCP_ALLOWED_ORIGINS).
+MCP_ALLOWED_HOSTS: list[str] = _csv(os.getenv("MCP_ALLOWED_HOSTS"), [])
+MCP_ALLOWED_ORIGINS: list[str] = _csv(os.getenv("MCP_ALLOWED_ORIGINS"), [])
 
 # Embeddings are sent to an OpenAI-compatible HTTP API. By default
 # we hit OpenAI directly; users behind an OpenAI-compatible gateway

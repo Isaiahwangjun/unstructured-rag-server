@@ -25,17 +25,26 @@ from pydantic import BaseModel, Field
 from . import config, embed, store
 
 
-# DNS-rebinding protection. FastMCP defaults to allowing only
-# localhost; once we deploy behind a real hostname (Render, Zeabur,
-# any reverse proxy), the Host header doesn't match and every request
-# 421s. We trust whatever the operator configures via MCP_ALLOWED_HOSTS
-# (comma-separated, supports wildcard "*"), defaulting to "*" so the
-# image runs out of the box on any PaaS.
-_security = TransportSecuritySettings(
-    enable_dns_rebinding_protection=True,
-    allowed_hosts=config.MCP_ALLOWED_HOSTS,
-    allowed_origins=config.MCP_ALLOWED_ORIGINS,
-)
+# DNS-rebinding protection. FastMCP defaults to enabling this with
+# a localhost-only allow-list, which 421s every request once we
+# deploy behind a real hostname (Render, Zeabur, any reverse proxy).
+#
+# DNS rebinding attacks matter when a server has cookie/auth state a
+# malicious browser script could hijack — this server has none, so
+# we disable the check by default. Operators who want it can list
+# explicit hostnames via MCP_ALLOWED_HOSTS (the SDK does not honour
+# a "*" wildcard; it only accepts exact matches or "<host>:*" port
+# wildcards).
+if config.MCP_ALLOWED_HOSTS:
+    _security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=config.MCP_ALLOWED_HOSTS,
+        allowed_origins=config.MCP_ALLOWED_ORIGINS or ["*"],
+    )
+else:
+    _security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    )
 
 mcp = FastMCP("unstructured-rag-server", transport_security=_security)
 
